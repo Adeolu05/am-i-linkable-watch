@@ -1,0 +1,25 @@
+name: health-check
+
+on:
+  schedule:
+    - cron: "17 */3 * * *"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check the site and the data age
+        run: |
+          set -euo pipefail
+          body=$(curl -fsS --max-time 30 https://am-i-linkable.vercel.app/api/v1/stats)
+          generated=$(echo "$body" | jq -r '.generatedAt')
+          tip=$(echo "$body" | jq -r '.tipHeight')
+          age_min=$(( ( $(date -u +%s) - $(date -u -d "$generated" +%s) ) / 60 ))
+          echo "generatedAt: $generated (${age_min} min old), tip height: $tip"
+          if [ "$age_min" -gt 120 ]; then
+            echo "::error::Data is ${age_min} minutes old. Check the Railway collector."
+            exit 1
+          fi
+          echo "OK"
